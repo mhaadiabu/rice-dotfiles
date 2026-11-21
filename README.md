@@ -34,9 +34,15 @@ Set Dolphin as the file manager with
   plus or minus badge to update the pin list.
 - Put a wallpaper in `~/Pictures/Wallpapers/default.jpg`, or select an image
   in the wallpaper picker. Set the Hyprlock image path independently.
-- Greeter installation is separate. Supply a greeter-readable `rocket.jpg`
-  beside its QML before deploying to `/etc/greetd/rice-greeter`. Review the
-  included greetd configuration and keep a known working login available.
+- Greeter installation is separate. Review the included greetd configuration
+  and deploy the QML under `/etc/greetd/rice-greeter`. Supply a greeter-readable
+  `lock-background.jpg` for the wallpaper. To start at the password field, set
+  `defaultUser` and `accountLabel` in the deployed QML. You can place an optional
+  `account-avatar.png` beside it.
+- If you use GNOME Keyring, add its optional auth and session hooks to greetd's
+  PAM stack so it can unlock the login keyring. The account and keyring passwords
+  must match. Follow the [Arch keyring setup instructions](https://wiki.archlinux.org/title/GNOME/Keyring#PAM_step)
+  and keep a known working login available.
 - Portal routing expects the LXQt and wlr backends. Install and set up
   `niri-screenshare` separately for its window picker. The Secret portal entry
   refers to GNOME Keyring. Adjust it to match the credential provider in use.

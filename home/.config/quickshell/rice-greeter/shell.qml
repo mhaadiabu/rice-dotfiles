@@ -18,63 +18,64 @@ ShellRoot {
         minimumWidth: 440
         minimumHeight: 440
         visibility: Greetd.available ? Window.FullScreen : Window.Windowed
-        color: "#111820"
-        palette {
-            window: "#171b21"
-            windowText: "#f0f3f6"
-            base: "#232b35"
-            text: "#f0f3f6"
-            placeholderText: "#aebac9"
-            button: "#2a3441"
-            buttonText: "#f0f3f6"
-            highlight: "#a9c9eb"
-            highlightedText: "#111820"
-        }
+        color: "#101418"
 
+        // Set these in the deployed copy to preselect an account.
+        readonly property string defaultUser: ""
+        readonly property string accountLabel: defaultUser
+        readonly property string typeface: "Aptos Narrow"
+        readonly property real layoutScale: Math.min(1, height / 620)
+        property string username: defaultUser
+        property bool otherUser: !defaultUser
         property bool waiting: false
         property bool promptOpen: false
         property bool echoResponse: false
-        property string prompt: ""
+        property string prompt: "Enter Password"
         property string notice: ""
-        property color noticeColor: "#c6d0da"
-        property int sessionIndex: 0
-        readonly property var sessions: [
-            { name: "Niri", command: "/usr/bin/niri-session", desktop: "niri" }
-        ]
-        readonly property var selectedSession: sessions[sessionIndex]
+        property color noticeColor: "#bfbfc4"
 
-        component LoginField: TextField {
-            leftPadding: 15
-            rightPadding: 10
-            font.family: "Inter"
-            font.pixelSize: 13
-            color: "white"
-            placeholderTextColor: "#d2dae3"
-            background: null
+        function startAuthentication() {
+            if (!Greetd.available || waiting || Greetd.state !== GreetdState.Inactive)
+                return;
+            waiting = true;
+            Greetd.createSession(username);
         }
 
         function submit() {
-            if (!Greetd.available || waiting) return;
+            if (!Greetd.available || waiting)
+                return;
+            notice = "";
             if (promptOpen) {
-                waiting = true;
+                const answer = entry.text;
+                entry.clear();
                 promptOpen = false;
-                const value = response.text;
-                response.clear();
-                Greetd.respond(value);
-            } else if (Greetd.state === GreetdState.Inactive && account.text.trim()) {
-                notice = "";
                 waiting = true;
-                Greetd.createSession(account.text.trim());
+                Greetd.respond(answer);
+            } else if (otherUser && entry.text.trim()) {
+                username = entry.text.trim();
+                entry.clear();
+                startAuthentication();
+            } else if (!otherUser && entry.text.length) {
+                startAuthentication();
             }
         }
 
-        function reset(message) {
+        function switchUser() {
+            otherUser = !otherUser;
+            promptOpen = false;
+            notice = "";
+            entry.clear();
+            username = otherUser ? "" : defaultUser;
+            entry.forceActiveFocus();
+        }
+
+        function finishAttempt(message) {
             waiting = false;
             promptOpen = false;
-            response.clear();
-            noticeColor = "#ffc1b6";
+            entry.clear();
+            noticeColor = "#ffb1b1";
             notice = message;
-            account.forceActiveFocus();
+            entry.forceActiveFocus();
         }
 
         Connections {
@@ -82,284 +83,180 @@ ShellRoot {
 
             function onAuthMessage(message, error, responseRequired, echoResponse) {
                 if (responseRequired) {
-                    greeter.prompt = message.trim().replace(/:$/, "") || "Password";
+                    const label = message.trim().replace(/:$/, "");
+                    const isPassword = !echoResponse && /^password$/i.test(label);
+                    // Submit the prefilled account's entry only to its first password prompt.
+                    if (!greeter.otherUser && isPassword && entry.text.length) {
+                        const answer = entry.text;
+                        entry.clear();
+                        Greetd.respond(answer);
+                        return;
+                    }
+                    greeter.prompt = isPassword || !label ? "Enter Password" : label;
                     greeter.echoResponse = echoResponse;
-                    response.clear();
+                    entry.clear();
                     greeter.promptOpen = true;
                     greeter.waiting = false;
-                    response.forceActiveFocus();
+                    entry.forceActiveFocus();
                 } else {
-                    greeter.noticeColor = error ? "#ffc1b6" : "#c6d0da";
+                    greeter.noticeColor = error ? "#ffb1b1" : "#bfbfc4";
                     greeter.notice = message;
                 }
             }
 
             function onAuthFailure(message) {
-                greeter.reset(message || "Sign-in failed. Try again.");
+                greeter.finishAttempt(message || "Sign-in failed. Try again.");
             }
 
             function onError(error) {
                 Greetd.cancelSession();
-                greeter.reset(error || "Could not start the session.");
+                greeter.finishAttempt(error || "Could not start the session. Try again.");
             }
 
             function onReadyToLaunch() {
                 greeter.waiting = true;
-                greeter.noticeColor = "#c6d0da";
-                const selected = greeter.selectedSession;
-                greeter.notice = "Starting " + selected.name + "…";
-                Greetd.launch([selected.command], [
+                greeter.noticeColor = "#bfbfc4";
+                greeter.notice = "Signing in…";
+                Greetd.launch(["/usr/bin/niri-session"], [
                     "XDG_SESSION_TYPE=wayland",
-                    "XDG_CURRENT_DESKTOP=" + selected.desktop
+                    "XDG_CURRENT_DESKTOP=niri"
                 ]);
             }
         }
 
         Image {
             anchors.fill: parent
-            source: "rocket.jpg"
+            source: "lock-background.jpg"
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
         }
 
+        Text {
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: -190 * greeter.layoutScale
+            text: Qt.formatDateTime(clock.date, "h:mm AP")
+            color: "#f5f5f7"
+            font.family: greeter.typeface
+            font.pixelSize: 64 * greeter.layoutScale
+        }
+
+        Text {
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: -130 * greeter.layoutScale
+            text: Qt.formatDateTime(clock.date, "dddd, MMMM dd")
+            color: "#bfd4d4d8"
+            font.family: greeter.typeface
+            font.pixelSize: 17
+        }
+
         Rectangle {
-            anchors.fill: parent
-            gradient: Gradient {
-                GradientStop { position: 0; color: "#ac090e16" }
-                GradientStop { position: 0.52; color: "#17090e16" }
-                GradientStop { position: 1; color: "#cf090e16" }
-            }
-        }
+            id: portrait
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: -25 * greeter.layoutScale
+            width: 90 * greeter.layoutScale
+            height: width
+            radius: width / 2
+            color: "transparent"
+            visible: !greeter.otherUser && avatar.status === Image.Ready
 
-        Column {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.top: parent.top
-            anchors.topMargin: Math.max(30, Math.round(parent.height * 0.105))
-            spacing: 0
-
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: Qt.formatDateTime(clock.date, "dddd, MMMM d")
-                color: "#e8edf4"
-                font.family: "Inter"
-                font.pixelSize: Math.max(16, Math.min(23, greeter.height * 0.032))
-                font.weight: Font.Medium
-            }
-
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: Qt.formatDateTime(clock.date, "HH:mm")
-                color: "white"
-                font.family: "Inter"
-                font.pixelSize: Math.max(68, Math.min(128, greeter.height * 0.16))
-                font.weight: Font.Normal
-                font.letterSpacing: -3
-            }
-        }
-
-        Column {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: Math.max(48, Math.round(parent.height * 0.08))
-            width: 248
-            spacing: 9
-
-            Rectangle {
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: 66
-                height: 66
-                radius: 33
-                color: "#ba243341"
-                border.color: "#4affffff"
-
-                Rectangle {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    y: 14
-                    width: 18
-                    height: 18
-                    radius: height / 2
-                    color: "#e0eaf5"
-                }
-
-                Rectangle {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    y: 36
-                    width: 32
-                    height: 16
-                    radius: height / 2
-                    color: "#e0eaf5"
-                }
-            }
-
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: parent.width
-                horizontalAlignment: Text.AlignHCenter
-                elide: Text.ElideRight
-                text: account.text.trim() || "Sign in"
-                textFormat: Text.PlainText
-                color: "white"
-                font.family: "Inter"
-                font.pixelSize: 15
-                font.weight: Font.DemiBold
+            Image {
+                id: avatar
+                anchors.fill: parent
+                source: greeter.defaultUser ? "account-avatar.png" : ""
+                fillMode: Image.PreserveAspectCrop
             }
 
             Rectangle {
-                width: parent.width
-                height: 38
-                radius: 19
-                color: "#b12b3642"
-                border.color: account.activeFocus || response.activeFocus ? "#889eb4" : "#42ffffff"
-
-                LoginField {
-                    id: account
-                    anchors.left: parent.left
-                    anchors.right: submitButton.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    height: parent.height
-                    visible: !greeter.promptOpen && !greeter.waiting
-                    placeholderText: "Username"
-                    focus: true
-                    selectByMouse: true
-                    onAccepted: greeter.submit()
-                }
-
-                LoginField {
-                    id: response
-                    anchors.left: parent.left
-                    anchors.right: submitButton.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    height: parent.height
-                    visible: greeter.promptOpen
-                    placeholderText: greeter.prompt
-                    Accessible.name: greeter.prompt
-                    echoMode: greeter.echoResponse ? TextInput.Normal : TextInput.Password
-                    inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhSensitiveData
-                    onAccepted: greeter.submit()
-                }
-
-                BusyIndicator {
-                    anchors.centerIn: parent
-                    width: 22
-                    height: 22
-                    running: greeter.waiting
-                    visible: running
-                }
-
-                Button {
-                    id: submitButton
-                    anchors.right: parent.right
-                    anchors.rightMargin: 4
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 30
-                    height: 30
-                    visible: !greeter.waiting
-                    enabled: Greetd.available && (greeter.promptOpen || account.text.trim().length > 0)
-                    Accessible.name: "Continue"
-                    onClicked: greeter.submit()
-
-                    contentItem: Text {
-                        text: "→"
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                        color: submitButton.enabled ? "white" : "#9baaba"
-                        font.pixelSize: 18
-                    }
-
-                    background: Rectangle {
-                        radius: 15
-                        color: submitButton.down ? "#657687" : "#455566"
-                        border.color: submitButton.visualFocus ? "#b9d7f3" : "transparent"
-                    }
-                }
+                anchors.fill: parent
+                radius: width / 2
+                color: "transparent"
+                border.width: 2
+                border.color: "#26ffffff"
             }
+        }
 
-            Text {
-                width: parent.width
-                height: Math.max(28, implicitHeight)
-                horizontalAlignment: Text.AlignHCenter
-                text: Greetd.available ? greeter.notice : "Preview · sign-in is disabled"
-                textFormat: Text.PlainText
-                wrapMode: Text.Wrap
-                color: greeter.noticeColor
-                font.family: "Inter"
-                font.pixelSize: 11
+        Text {
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: 35 * greeter.layoutScale
+            text: greeter.otherUser ? greeter.username || "Other user" : greeter.accountLabel
+            textFormat: Text.PlainText
+            color: "#e6f5f5f7"
+            font.family: greeter.typeface
+            font.pixelSize: 16
+        }
+
+        TextField {
+            id: entry
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: 95 * greeter.layoutScale
+            width: 260
+            height: 44
+            leftPadding: 14
+            rightPadding: 14
+            focus: true
+            readOnly: greeter.waiting
+            selectByMouse: true
+            horizontalAlignment: TextInput.AlignHCenter
+            placeholderText: greeter.waiting ? "Please wait…" :
+                greeter.promptOpen ? greeter.prompt : greeter.otherUser ? "Username" : "Enter Password"
+            Accessible.name: placeholderText
+            echoMode: (greeter.promptOpen ? !greeter.echoResponse : !greeter.otherUser) ?
+                TextInput.Password : TextInput.Normal
+            inputMethodHints: echoMode === TextInput.Password ?
+                Qt.ImhNoPredictiveText | Qt.ImhSensitiveData : Qt.ImhNoPredictiveText
+            font.family: greeter.typeface
+            font.pixelSize: 16
+            color: "#f5f5f7"
+            placeholderTextColor: "#bfbfc4"
+            selectionColor: "#6ea8fe"
+            selectedTextColor: "#101418"
+            onAccepted: greeter.submit()
+            background: Rectangle {
+                radius: 13
+                color: "#a6141418"
+                border.color: greeter.notice && Qt.colorEqual(greeter.noticeColor, "#ffb1b1") ?
+                    "#ffb1b1" : entry.activeFocus ? "#80ffffff" : "#26ffffff"
             }
+        }
+
+        Text {
+            anchors.top: entry.bottom
+            anchors.topMargin: 8
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Math.min(380, greeter.width - 40)
+            text: Greetd.available ? greeter.notice : "Preview. Sign-in is disabled."
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            horizontalAlignment: Text.AlignHCenter
+            color: greeter.noticeColor
+            font.family: greeter.typeface
+            font.pixelSize: 14
         }
 
         Button {
-            id: sessionButton
-            visible: greeter.sessions.length > 1
-            anchors.right: parent.right
+            id: switchButton
             anchors.bottom: parent.bottom
-            anchors.margins: 22
-            width: 42
-            height: 42
-            enabled: !greeter.waiting
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottomMargin: 20
+            visible: !!greeter.defaultUser
+            text: greeter.otherUser ? "Back to " + greeter.accountLabel : "Switch user"
+            enabled: Greetd.available && Greetd.state === GreetdState.Inactive && !greeter.waiting
             hoverEnabled: true
-            Accessible.name: "Desktop session: " + greeter.selectedSession.name
-            ToolTip.visible: hovered && !sessionMenu.opened
-            ToolTip.text: Accessible.name
-            ToolTip.delay: 400
-            onClicked: sessionMenu.popup(width - sessionMenu.width, -sessionMenu.implicitHeight - 8)
+            onClicked: greeter.switchUser()
 
-            contentItem: Item {
-                Rectangle {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.verticalCenterOffset: -2
-                    width: 18
-                    height: 12
-                    radius: 2
-                    color: "transparent"
-                    border.color: "#f0f3f6"
-                    border.width: 1.5
-                }
-                Rectangle {
-                    anchors.centerIn: parent
-                    anchors.verticalCenterOffset: 6
-                    width: 2
-                    height: 4
-                    color: "#f0f3f6"
-                }
-                Rectangle {
-                    anchors.centerIn: parent
-                    anchors.verticalCenterOffset: 8
-                    width: 8
-                    height: 1
-                    color: "#f0f3f6"
-                }
+            contentItem: Text {
+                text: switchButton.text
+                color: switchButton.enabled ? "#f5f5f7" : "#bfbfc4"
+                font.family: greeter.typeface
+                font.pixelSize: 15
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
             }
 
             background: Rectangle {
-                radius: 21
-                color: sessionButton.hovered || sessionMenu.opened ? "#d33c4a59" : "#b12b3642"
-                border.color: sessionButton.visualFocus ? "#b9d7f3" : "#42ffffff"
-            }
-
-            Menu {
-                id: sessionMenu
-                parent: sessionButton
-                width: 156
-                padding: 5
-
-                ButtonGroup {
-                    id: sessionChoices
-                }
-
-                MenuItem {
-                    text: "Niri"
-                    checkable: true
-                    checked: greeter.sessionIndex === 0
-                    ButtonGroup.group: sessionChoices
-                    onTriggered: greeter.sessionIndex = 0
-                }
-
-                background: Rectangle {
-                    radius: 12
-                    color: "#f0232b35"
-                    border.color: "#42ffffff"
-                }
+                radius: 10
+                color: switchButton.hovered ? "#cf141418" : "#a6141418"
+                border.color: switchButton.visualFocus ? "#80ffffff" : "transparent"
             }
         }
     }
