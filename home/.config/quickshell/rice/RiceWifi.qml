@@ -197,12 +197,34 @@ PopupWindow {
                 }
 
                 Switch {
+                    id: radioSwitch
+                    padding: 7
                     checked: wifi.radioOn
                     enabled: wifi.adapter !== null && Networking.wifiHardwareEnabled && !wifi.joining
                     Accessible.name: "Wi-Fi"
                     onToggled: Networking.wifiEnabled = checked
-                    palette.highlight: "#9fc6ed"
-                    palette.button: "#393939"
+
+                    indicator: Rectangle {
+                        implicitWidth: 36
+                        implicitHeight: 20
+                        x: radioSwitch.leftPadding
+                        anchors.verticalCenter: parent.verticalCenter
+                        radius: height / 2
+                        color: radioSwitch.checked
+                            ? (radioSwitch.enabled ? "#9fc6ed" : "#526779")
+                            : (radioSwitch.enabled ? "#3b3b3b" : "#292929")
+                        border.color: radioSwitch.visualFocus ? "#f5f5f5"
+                            : radioSwitch.checked ? "transparent" : "#626262"
+
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: radioSwitch.checked ? parent.width - width - 3 : 3
+                            width: 14
+                            height: 14
+                            radius: height / 2
+                            color: radioSwitch.enabled ? "#f5f5f5" : "#9a9a9a"
+                        }
+                    }
                 }
             }
 

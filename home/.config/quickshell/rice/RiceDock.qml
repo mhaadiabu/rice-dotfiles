@@ -231,15 +231,11 @@ PanelWindow {
 
                         Item {
                             id: button
+                            readonly property bool iconRaised: dock.shown && !dock.reduceMotion
+                                && (tileHover.hovered || pin.hovered)
                             anchors.right: parent.right
                             width: dock.tileWidth
                             height: parent.height
-
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: Math.max(0, tray.radius - 6)
-                                color: tileHover.hovered ? "#13ffffff" : "transparent"
-                            }
 
                             Image {
                                 anchors.horizontalCenter: parent.horizontalCenter
@@ -250,6 +246,50 @@ PanelWindow {
                                 source: tile.iconSource
                                 sourceSize.width: 72
                                 sourceSize.height: 72
+                                transformOrigin: Item.Bottom
+                                scale: button.iconRaised ? 1.06 : 1
+
+                                Behavior on scale {
+                                    enabled: !dock.reduceMotion
+                                    NumberAnimation {
+                                        duration: button.iconRaised ? 150 : 100
+                                        easing.type: Easing.OutCubic
+                                    }
+                                }
+
+                                transform: [
+                                    Translate {
+                                        y: button.iconRaised ? -6 : 0
+                                        Behavior on y {
+                                            enabled: !dock.reduceMotion
+                                            NumberAnimation {
+                                                duration: button.iconRaised ? 150 : 100
+                                                easing.type: Easing.OutCubic
+                                            }
+                                        }
+                                    },
+                                    Translate {
+                                        id: launchLift
+                                    }
+                                ]
+                            }
+
+                            SequentialAnimation {
+                                id: launchBounce
+                                NumberAnimation {
+                                    target: launchLift
+                                    property: "y"
+                                    to: -12
+                                    duration: 100
+                                    easing.type: Easing.OutCubic
+                                }
+                                NumberAnimation {
+                                    target: launchLift
+                                    property: "y"
+                                    to: 0
+                                    duration: 180
+                                    easing.type: Easing.OutBounce
+                                }
                             }
 
                             Rectangle {
@@ -267,6 +307,7 @@ PanelWindow {
                                 id: tileHover
                                 blocking: false
                                 cursorShape: Qt.PointingHandCursor
+                                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                             }
 
                             TapHandler {
@@ -276,6 +317,8 @@ PanelWindow {
                                         Quickshell.execDetached(["niri", "msg", "action", "focus-window", "--id", tile.targetId]);
                                     } else if (tile.desktopId) {
                                         Quickshell.execDetached(["gtk-launch", tile.desktopId]);
+                                        if (!dock.reduceMotion && !launchBounce.running)
+                                            launchBounce.start();
                                     }
                                 }
                             }
