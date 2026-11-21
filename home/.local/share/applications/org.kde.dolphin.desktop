@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Dolphin
+GenericName=File Manager
+Icon=file-manager
+Exec=rice-files %u
+MimeType=inode/directory;
+Categories=Qt;KDE;System;FileManager;

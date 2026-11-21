@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Task Manager
+Icon=utilities-system-monitor
+Exec=rice-system-monitor
+Categories=System;Monitor;

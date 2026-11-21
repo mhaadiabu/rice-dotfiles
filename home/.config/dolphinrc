@@ -1,0 +1,30 @@
+[General]
+BrowseThroughArchives=false
+EditableUrl=false
+ShowFullPath=false
+ShowSelectionToggle=false
+ShowStatusBar=2
+ShowZoomSlider=false
+Version=202
+ViewPropsTimestamp=2026,11,21,16,20,30.774
+
+[IconsMode]
+IconSize=48
+MaximumTextLines=1
+PreviewSize=80
+
+[KFileDialog Settings]
+Places Icons Auto-resize=false
+Places Icons Static Size=22
+
+[MainWindow]
+MenuBar=Disabled
+
+[MainWindow][mainToolBar]
+ToolButtonStyle=IconOnly
+
+[PreviewSettings]
+Plugins=audiothumbnail,blenderthumbnail,comicbookthumbnail,cursorthumbnail,djvuthumbnail,ebookthumbnail,exrthumbnail,fontthumbnail,imagethumbnail,jpegthumbnail,kraorathumbnail,windowsexethumbnail,windowsimagethumbnail,mobithumbnail,opendocumentthumbnail,gsthumbnail,rawthumbnail,svgthumbnail,ffmpegthumbs
+
+[UiSettings]
+ColorScheme=RiceDark

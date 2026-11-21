@@ -1,0 +1,68 @@
+#!/bin/sh
+set -eu
+
+config_dir="${XDG_CONFIG_HOME:-$HOME/.config}"
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/rice"
+data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/rice"
+
+case "${1:-}" in
+  start-wallpaper)
+    exec systemctl --user start rice-wallpaper.service
+    ;;
+  render-wallpaper)
+    wallpaper="${RICE_WALLPAPER:-$HOME/Pictures/Wallpapers/default.jpg}"
+    if [ -r "$state_dir/wallpaper" ]; then
+      IFS= read -r wallpaper < "$state_dir/wallpaper" || true
+    fi
+    if [ -r "$wallpaper" ]; then
+      exec swaybg -i "$wallpaper" -m fill
+    fi
+    exec swaybg -c '#1e1e2e'
+    ;;
+  set-wallpaper)
+    test -f "$2"
+    mkdir -p "$state_dir"
+    temporary=$(mktemp "$state_dir/wallpaper.XXXXXX")
+    trap 'rm -f -- "$temporary"' EXIT
+    printf '%s\n' "$2" > "$temporary"
+    mv -- "$temporary" "$state_dir/wallpaper"
+    exec systemctl --user restart rice-wallpaper.service
+    ;;
+  start-clipboard)
+    if command -v cliphist >/dev/null; then
+      exec systemctl --user start rice-clipboard.service
+    fi
+    ;;
+  paste-history)
+    case "$2" in
+      ''|*[!0-9]*) exit 2 ;;
+    esac
+    printf '%s\n' "$2" | cliphist decode | wl-copy
+    ;;
+  notes)
+    mkdir -p "$data_dir/notes"
+    if ! command -v featherpad >/dev/null; then
+      exec zenity --error --text="FeatherPad is needed to open Notes."
+    fi
+    note="$data_dir/notes/Quick Note.txt"
+    [ -e "$note" ] || touch "$note"
+    exec featherpad "$note"
+    ;;
+  files)
+    exec xdg-open "$HOME"
+    ;;
+  settings)
+    exec featherpad "$config_dir/quickshell/rice/dock-pins.json"
+    ;;
+  window-rules)
+    exec featherpad "$config_dir/niri/config.kdl"
+    ;;
+  rename-workspace)
+    name=$(zenity --entry --title="Rename workspace" --text="Workspace name") || exit 0
+    [ -n "$name" ] || exit 0
+    exec niri msg action set-workspace-name "$name"
+    ;;
+  *)
+    exit 2
+    ;;
+esac

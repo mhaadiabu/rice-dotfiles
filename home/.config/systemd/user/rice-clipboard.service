@@ -1,0 +1,8 @@
+[Unit]
+Description=Wayland clipboard history
+PartOf=graphical-session.target
+ConditionPathIsExecutable=/usr/bin/cliphist
+
+[Service]
+ExecStart=/usr/bin/wl-paste --watch /usr/bin/cliphist store
+Restart=on-failure

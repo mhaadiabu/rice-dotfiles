@@ -1,0 +1,7 @@
+[Unit]
+Description=Rice wallpaper
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/rice-desktop render-wallpaper
+Restart=on-failure

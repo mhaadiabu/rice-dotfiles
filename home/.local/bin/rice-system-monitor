@@ -1,0 +1,3 @@
+#!/bin/sh
+# Launch btop in a dedicated Kitty window matching the rice theme
+exec kitty --class rice-btop --title "Task Manager" -e btop "$@"

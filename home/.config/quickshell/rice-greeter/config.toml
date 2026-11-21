@@ -1,0 +1,6 @@
+[terminal]
+vt = 1
+
+[default_session]
+command = "/usr/bin/cage -s -- /usr/bin/env QT_QPA_PLATFORM=wayland /usr/bin/qs -p /etc/greetd/rice-greeter/shell.qml || exec /usr/bin/agreety --cmd /usr/bin/niri-session"
+user = "greeter"

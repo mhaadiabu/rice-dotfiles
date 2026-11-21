@@ -1,0 +1,190 @@
+config-notification {
+    disable-failed
+}
+
+gestures {
+    hot-corners {
+        off
+    }
+}
+
+input {
+    keyboard {
+        xkb {
+            layout "us"
+        }
+        numlock
+    }
+    touchpad {
+        tap
+        natural-scroll
+        scroll-factor 0.5
+    }
+    warp-mouse-to-focus
+    focus-follows-mouse max-scroll-amount="0%"
+}
+
+spawn-at-startup "qs" "-c" "rice"
+spawn-at-startup "rice-desktop" "start-wallpaper"
+spawn-at-startup "rice-desktop" "start-clipboard"
+spawn-at-startup "kanshi"
+spawn-at-startup "lxqt-policykit-agent"
+spawn-at-startup "swayidle" "-w" "before-sleep" "hyprlock"
+spawn-at-startup "xwayland-satellite"
+
+environment {
+    XDG_CURRENT_DESKTOP "niri"
+    QS_ICON_THEME "MacTahoe"
+}
+
+hotkey-overlay {
+    skip-at-startup
+}
+
+prefer-no-csd
+screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
+
+animations {
+    workspace-switch {
+        spring damping-ratio=1.0 stiffness=1000 epsilon=0.0001
+    }
+    window-open {
+        duration-ms 150
+        curve "ease-out-expo"
+    }
+    window-close {
+        duration-ms 150
+        curve "ease-out-quad"
+    }
+    horizontal-view-movement {
+        spring damping-ratio=1.0 stiffness=800 epsilon=0.0001
+    }
+    window-movement {
+        spring damping-ratio=1.0 stiffness=800 epsilon=0.0001
+    }
+    window-resize {
+        spring damping-ratio=1.0 stiffness=800 epsilon=0.0001
+    }
+    screenshot-ui-open {
+        duration-ms 200
+        curve "ease-out-quad"
+    }
+    overview-open-close {
+        spring damping-ratio=1.0 stiffness=800 epsilon=0.0001
+    }
+}
+
+layer-rule {
+    match namespace="^quickshell$"
+    place-within-backdrop true
+}
+
+overview {
+    workspace-shadow {
+        off
+    }
+}
+
+window-rule {
+    match app-id=r#"^org\.kde\."#
+    draw-border-with-background false
+    geometry-corner-radius 16
+    clip-to-geometry true
+}
+
+window-rule {
+    match app-id=r#"^org\.kde\.dolphin(?:\.desktop)?$"#
+    open-floating false
+    default-column-width { proportion 0.76; }
+}
+
+window-rule {
+    match app-id="rice-btop"
+    open-floating false
+    default-column-width { proportion 0.76; }
+}
+
+window-rule {
+    match app-id=r#"^xdg-desktop-portal$"#
+    open-floating true
+}
+
+window-rule {
+    match app-id=r#"^steam$"# title=r#"^notificationtoasts_\d+_desktop$"#
+    default-floating-position x=10 y=10 relative-to="bottom-right"
+    open-focused false
+}
+
+window-rule {
+    match app-id=r#"^org\.wezfurlong\.wezterm$"#
+    match app-id="Alacritty"
+    match app-id="zen"
+    match app-id="com.mitchellh.ghostty"
+    match app-id="kitty"
+    match app-id="foot"
+    draw-border-with-background false
+}
+
+window-rule {
+    match app-id=r#"firefox$"# title="^Picture-in-Picture$"
+    match app-id="zoom"
+    open-floating true
+}
+
+window-rule {
+    match app-id=r#"org.quickshell$"#
+    open-floating true
+}
+
+debug {
+    honor-xdg-activation-with-invalid-serial
+}
+
+recent-windows {
+    binds {
+        Alt+Tab         { next-window scope="output"; }
+        Alt+Shift+Tab   { previous-window scope="output"; }
+        Alt+grave       { next-window filter="app-id"; }
+        Alt+Shift+grave { previous-window filter="app-id"; }
+    }
+}
+
+include "desktop.kdl"
+include "bindings.kdl"
+
+layout {
+    gaps 6
+    focus-ring {
+        width 1
+        active-color "#a9c9eb"
+        inactive-color "#ffffff30"
+    }
+    border {
+        off
+    }
+    shadow {
+        on
+        softness 24
+        spread 2
+        offset x=0 y=6
+        color "#00000052"
+    }
+}
+
+window-rule {
+    geometry-corner-radius 16
+    clip-to-geometry true
+}
+
+binds {
+    Mod+M repeat=false hotkey-overlay-title="Task Manager" { spawn "rice-system-monitor"; }
+    Ctrl+Alt+Delete repeat=false hotkey-overlay-title="Task Manager" { spawn "rice-system-monitor"; }
+    Mod+Space repeat=false hotkey-overlay-title="Spotlight" { spawn "qs" "ipc" "-c" "rice" "call" "spotlight" "toggle"; }
+    Mod+E     { spawn "rice-desktop" "files"; }
+    Ctrl+Alt+T { spawn "foot"; }
+    Alt+F4    { close-window; }
+    Print { spawn "flameshot" "gui"; }
+    Shift+Print { spawn "sh" "-c" "grim -g \"$(slurp)\" - | wl-copy"; }
+    Mod+Shift+R hotkey-overlay-title="Record (OpenScreen)" { spawn "sh" "-c" "~/.config/niri/screencast.sh"; }
+    Ctrl+Shift+2 repeat=false { spawn "gdbus" "call" "--session" "--dest" "com.t3tools.T3Code.SnapShot" "--object-path" "/com/t3tools/SnapShot" "--method" "com.t3tools.SnapShot.Capture"; }
+}
