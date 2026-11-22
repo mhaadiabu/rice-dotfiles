@@ -7,6 +7,8 @@ import Quickshell.Wayland
 PanelWindow {
     id: spotlight
 
+    required property RiceTheme theme
+
     required property string face
     required property var windows
     required property var utilities
@@ -314,9 +316,9 @@ PanelWindow {
         height: search.height + Math.max(44, Math.min(spotlight.rows.length, 7) * spotlight.rowHeight) + footer.height + 10
         anchors.horizontalCenter: parent.horizontalCenter
         y: Math.round(parent.height * 0.22)
-        radius: 18
-        color: "#f21a1a1a"
-        border.color: "#34ffffff"
+        radius: spotlight.theme.radiusPanel
+        color: spotlight.theme.surface
+        border.color: spotlight.theme.line
 
         // Keep clicks on the search surface separate from the backdrop.
         MouseArea { anchors.fill: parent }
@@ -333,7 +335,7 @@ PanelWindow {
                 height: 14
                 radius: 7
                 color: "transparent"
-                border.color: "#c8c8c8"
+                border.color: spotlight.theme.secondary
                 border.width: 2
             }
 
@@ -344,7 +346,7 @@ PanelWindow {
                 height: 2
                 radius: 1
                 rotation: 45
-                color: "#c8c8c8"
+                color: spotlight.theme.secondary
             }
         }
 
@@ -361,9 +363,10 @@ PanelWindow {
             Accessible.name: placeholderText
             font.family: spotlight.face
             font.pixelSize: 21
-            color: "#f6f6f6"
-            placeholderTextColor: "#acacac"
-            selectionColor: "#535b66"
+            color: spotlight.theme.ink
+            placeholderTextColor: spotlight.theme.muted
+            selectionColor: spotlight.theme.accent
+            selectedTextColor: "#ffffff"
             background: null
             focus: true
             Keys.priority: Keys.BeforeItem
@@ -380,6 +383,7 @@ PanelWindow {
             color: search.color
             placeholderTextColor: search.placeholderTextColor
             selectionColor: search.selectionColor
+            selectedTextColor: search.selectedTextColor
             background: null
             Keys.priority: Keys.BeforeItem
             Keys.onPressed: event => spotlight.handleKey(event)
@@ -393,10 +397,10 @@ PanelWindow {
             anchors.margins: 8
             anchors.topMargin: 0
             height: 1
-            color: "#33ffffff"
+            color: spotlight.theme.line
         }
 
-        ListView {
+        RiceListView {
             id: resultList
             anchors.top: search.bottom
             anchors.topMargin: 5
@@ -419,8 +423,8 @@ PanelWindow {
                 required property var modelData
                 width: ListView.view.width
                 height: spotlight.rowHeight
-                radius: surface.radius - 10
-                color: index === spotlight.selectedIndex ? "#2cffffff" : hit.containsMouse ? "#13ffffff" : "transparent"
+                radius: spotlight.theme.radiusControl
+                color: index === spotlight.selectedIndex ? spotlight.theme.selected : hit.containsMouse ? spotlight.theme.tile : "transparent"
 
                 Image {
                     anchors.left: parent.left
@@ -447,7 +451,7 @@ PanelWindow {
                         text: row.modelData.name
                         textFormat: Text.PlainText
                         elide: Text.ElideRight
-                        color: "#f6f6f6"
+                        color: spotlight.theme.ink
                         font.family: spotlight.face
                         font.pixelSize: 15
                     }
@@ -456,7 +460,7 @@ PanelWindow {
                         text: row.modelData.location
                         textFormat: Text.PlainText
                         elide: Text.ElideMiddle
-                        color: "#b4b4b4"
+                        color: spotlight.theme.muted
                         font.family: spotlight.face
                         font.pixelSize: 11
                     }
@@ -472,7 +476,7 @@ PanelWindow {
             }
         }
 
-        ListView {
+        RiceListView {
             id: actionList
             anchors.fill: resultList
             visible: spotlight.actionTarget !== null
@@ -510,15 +514,15 @@ PanelWindow {
                         text: actionRow.text
                         textFormat: Text.PlainText
                         elide: Text.ElideRight
-                        color: "#f6f6f6"
+                        color: spotlight.theme.ink
                         font.family: spotlight.face
                         font.pixelSize: 15
                     }
                 }
                 background: Rectangle {
-                    radius: surface.radius - 10
-                    color: actionRow.index === actionList.currentIndex ? "#2cffffff"
-                        : actionRow.hovered ? "#13ffffff" : "transparent"
+                    radius: spotlight.theme.radiusControl
+                    color: actionRow.index === actionList.currentIndex ? spotlight.theme.selected
+                        : actionRow.hovered ? spotlight.theme.tile : "transparent"
                 }
             }
         }
@@ -533,7 +537,7 @@ PanelWindow {
                 if (spotlight.mode !== "windows" && (fileDelay.running || fileReader.running)) return "Searching files…";
                 return "No results";
             }
-            color: "#acacac"
+            color: spotlight.theme.muted
             font.family: spotlight.face
             font.pixelSize: 14
         }
@@ -553,7 +557,7 @@ PanelWindow {
                 anchors.margins: 8
                 anchors.topMargin: 0
                 height: 1
-                color: "#33ffffff"
+                color: spotlight.theme.line
             }
 
             Text {
@@ -561,7 +565,7 @@ PanelWindow {
                 anchors.leftMargin: 14
                 anchors.verticalCenter: parent.verticalCenter
                 text: spotlight.actionTarget ? "Esc  Back" : "↑ ↓  Select     ↵  Open"
-                color: "#acacac"
+                color: spotlight.theme.muted
                 font.family: spotlight.face
                 font.pixelSize: 12
             }
@@ -578,14 +582,14 @@ PanelWindow {
                 onClicked: spotlight.toggleActions()
                 contentItem: Text {
                     text: actionsButton.text
-                    color: "#d5d5d5"
+                    color: spotlight.theme.secondary
                     font.family: spotlight.face
                     font.pixelSize: 12
                     verticalAlignment: Text.AlignVCenter
                 }
                 background: Rectangle {
-                    radius: 5
-                    color: actionsButton.hovered ? "#22ffffff" : "transparent"
+                    radius: spotlight.theme.radiusSmall
+                    color: actionsButton.hovered ? spotlight.theme.hover : "transparent"
                 }
             }
         }

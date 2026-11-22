@@ -4,10 +4,10 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Networking
 
-PopupWindow {
+FocusScope {
     id: wifi
     required property string face
-    required property color panelColor
+    required property RiceTheme theme
 
     readonly property WifiDevice adapter: Networking.devices.values.find(device => device.type === DeviceType.Wifi) ?? null
     readonly property bool radioOn: Networking.wifiEnabled && Networking.wifiHardwareEnabled
@@ -21,9 +21,8 @@ PopupWindow {
     readonly property bool asksForPassword: phase === "password"
 
     implicitWidth: 302
-    implicitHeight: contents.implicitHeight + 26
-    grabFocus: true
-    color: "transparent"
+    implicitHeight: contents.implicitHeight + theme.panelPadding * 2
+    required property bool motionEnabled
 
     function supportsPassword(network) {
         return [WifiSecurityType.WpaPsk, WifiSecurityType.Wpa2Psk, WifiSecurityType.Sae].includes(network.security);
@@ -82,7 +81,10 @@ PopupWindow {
         if (needsPassword && visible) Qt.callLater(() => secret.forceActiveFocus());
     }
 
-    onVisibleChanged: if (!visible && !joining) reset()
+    onVisibleChanged: {
+        if (visible) forceActiveFocus();
+        else if (!joining) reset();
+    }
     onRadioOnChanged: if (!radioOn) reset()
     onSelectedChanged: if (!selected && phase !== "idle") reset()
 
@@ -122,7 +124,7 @@ PopupWindow {
     }
 
     component Caption: Text {
-        color: "#a4a4a4"
+        color: wifi.theme.muted
         font.family: wifi.face
         font.pixelSize: 13
         textFormat: Text.PlainText
@@ -137,11 +139,11 @@ PopupWindow {
         rightPadding: 12
         topPadding: 6
         bottomPadding: 6
-        palette.buttonText: primary ? "#161616" : "#eeeeee"
+        palette.buttonText: primary && enabled ? wifi.theme.inverseInk : wifi.theme.ink
         background: Rectangle {
-            radius: 6
-            color: control.primary ? (control.enabled ? "#e9e9e9" : "#555555")
-                : control.hovered || control.visualFocus ? "#3b3b3b" : "#292929"
+            radius: wifi.theme.radiusControl
+            color: control.primary ? (control.enabled ? wifi.theme.ink : wifi.theme.card)
+                : control.hovered || control.visualFocus ? wifi.theme.hover : wifi.theme.card
         }
     }
 
@@ -158,32 +160,25 @@ PopupWindow {
                 width: 2
                 height: 4 + index * 2
                 radius: 1
-                color: bars.strength >= (index + 1) / 4 - 0.12 ? "#dfdfdf" : "#484848"
+                color: bars.strength >= (index + 1) / 4 - 0.12 ? wifi.theme.ink : wifi.theme.line
             }
         }
     }
 
-    Rectangle {
-        anchors.fill: parent
-        color: wifi.panelColor
-        radius: 16
-        transformOrigin: Item.TopRight
+    MouseArea { anchors.fill: parent }
 
-        opacity: wifi.visible ? 1.0 : 0.0
-        scale: wifi.visible ? 1.0 : 0.92
-        transform: Translate {
-            y: wifi.visible ? 0 : -8
-            Behavior on y { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-        }
-        Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+    RiceMenuSurface {
+        anchors.fill: parent
+        color: wifi.theme.surface
+        radius: wifi.theme.radiusPanel
+        motionEnabled: wifi.motionEnabled
 
         ColumnLayout {
             id: contents
-            x: 13
-            y: 13
-            width: parent.width - 26
-            spacing: 10
+            x: wifi.theme.panelPadding
+            y: wifi.theme.panelPadding
+            width: parent.width - wifi.theme.panelPadding * 2
+            spacing: wifi.theme.gap
 
             RowLayout {
                 Layout.fillWidth: true
@@ -191,7 +186,7 @@ PopupWindow {
                 Caption {
                     Layout.fillWidth: true
                     text: "Wi-Fi"
-                    color: "#f5f5f5"
+                    color: wifi.theme.ink
                     font.pixelSize: 17
                     font.weight: Font.DemiBold
                 }
@@ -211,10 +206,10 @@ PopupWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         radius: height / 2
                         color: radioSwitch.checked
-                            ? (radioSwitch.enabled ? "#9fc6ed" : "#526779")
-                            : (radioSwitch.enabled ? "#3b3b3b" : "#292929")
-                        border.color: radioSwitch.visualFocus ? "#f5f5f5"
-                            : radioSwitch.checked ? "transparent" : "#626262"
+                            ? (radioSwitch.enabled ? wifi.theme.accent : wifi.theme.outline)
+                            : (radioSwitch.enabled ? wifi.theme.hover : wifi.theme.card)
+                        border.color: radioSwitch.visualFocus ? wifi.theme.ink
+                            : radioSwitch.checked ? "transparent" : wifi.theme.outline
 
                         Rectangle {
                             anchors.verticalCenter: parent.verticalCenter
@@ -222,16 +217,10 @@ PopupWindow {
                             width: 14
                             height: 14
                             radius: height / 2
-                            color: radioSwitch.enabled ? "#f5f5f5" : "#9a9a9a"
+                            color: radioSwitch.enabled ? "#ffffff" : wifi.theme.muted
                         }
                     }
                 }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 1
-                color: "#303030"
             }
 
             Caption {
@@ -244,17 +233,17 @@ PopupWindow {
             Rectangle {
                 visible: wifi.radioOn && wifi.connectedNetwork !== null
                 Layout.fillWidth: true
-                Layout.preferredHeight: 48
-                color: "#252525"
-                radius: 9
+                Layout.preferredHeight: 52
+                color: wifi.theme.card
+                radius: wifi.theme.radiusCard
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    spacing: 9
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    spacing: 10
 
-                    Rectangle { width: 6; height: 6; radius: 3; color: "#9fc6ed" }
+                    Rectangle { width: 6; height: 6; radius: 3; color: wifi.theme.accent }
 
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -262,7 +251,7 @@ PopupWindow {
                         Caption {
                             Layout.fillWidth: true
                             text: wifi.connectedNetwork?.name ?? ""
-                            color: "#f5f5f5"
+                            color: wifi.theme.ink
                             font.weight: Font.DemiBold
                             elide: Text.ElideRight
                         }
@@ -276,18 +265,28 @@ PopupWindow {
             ColumnLayout {
                 Layout.fillWidth: true
                 visible: wifi.radioOn && wifi.adapter !== null && wifi.phase === "idle"
-                spacing: 4
+                spacing: 6
 
-                Caption { text: "Nearby networks"; font.weight: Font.DemiBold }
+                Caption { Layout.leftMargin: 2; text: "Nearby networks"; font.weight: Font.DemiBold }
                 Caption {
                     Layout.fillWidth: true
                     visible: nearby.count === 0
                     text: "Looking for networks…"
                 }
-                ListView {
-                    id: nearby
+                // Rows sit 4px inside the card, so their radius is the card's minus 4.
+                Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(count * 42, 168)
+                    Layout.preferredHeight: nearby.height + 8
+                    visible: nearby.count > 0
+                    radius: wifi.theme.radiusCard
+                    color: wifi.theme.card
+
+                RiceListView {
+                    id: nearby
+                    x: 4
+                    y: 4
+                    width: parent.width - 8
+                    height: Math.min(count * 42, 168)
                     visible: count > 0
                     clip: true
 
@@ -302,7 +301,7 @@ PopupWindow {
                         required property WifiNetwork modelData
                         width: ListView.view.width
                         height: 42
-                        horizontalPadding: 9
+                        horizontalPadding: 10
                         verticalPadding: 3
                         Accessible.name: modelData.name + ", " + wifi.securityLabel(modelData)
                         onClicked: wifi.choose(modelData)
@@ -313,7 +312,7 @@ PopupWindow {
                                 Caption {
                                     Layout.fillWidth: true
                                     text: networkButton.modelData.name
-                                    color: "#f5f5f5"
+                                    color: wifi.theme.ink
                                     elide: Text.ElideRight
                                 }
                                 Caption {
@@ -324,10 +323,11 @@ PopupWindow {
                             Signal { strength: networkButton.modelData.signalStrength }
                         }
                         background: Rectangle {
-                            radius: 6
-                            color: networkButton.hovered || networkButton.visualFocus ? "#292929" : "transparent"
+                            radius: wifi.theme.radiusControl
+                            color: networkButton.hovered || networkButton.visualFocus ? wifi.theme.hover : "transparent"
                         }
                     }
+                }
                 }
             }
 
@@ -340,7 +340,7 @@ PopupWindow {
                     Layout.fillWidth: true
                     text: wifi.selected?.name ?? ""
                     elide: Text.ElideRight
-                    color: "#f5f5f5"
+                    color: wifi.theme.ink
                     font.weight: Font.DemiBold
                     font.pixelSize: 16
                 }
@@ -353,7 +353,7 @@ PopupWindow {
                         : wifi.asksForPassword ? "Enter the network password to join."
                         : wifi.selected?.known ? "Use the saved connection."
                         : "Join this network?")
-                    color: wifi.errorText ? "#ff9d95" : "#a4a4a4"
+                    color: wifi.errorText ? wifi.theme.error : wifi.theme.muted
                 }
 
                 RowLayout {
@@ -369,13 +369,15 @@ PopupWindow {
                         inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
                         font.family: wifi.face
                         font.pixelSize: 13
-                        color: "#eeeeee"
-                        placeholderTextColor: "#a4a4a4"
+                        color: wifi.theme.ink
+                        placeholderTextColor: wifi.theme.muted
+                        selectionColor: wifi.theme.accent
+                        selectedTextColor: "#ffffff"
                         onAccepted: wifi.join()
                         background: Rectangle {
-                            color: "#252525"
-                            radius: 6
-                            border.color: secret.activeFocus ? "#8caccb" : "#444444"
+                            color: wifi.theme.card
+                            radius: wifi.theme.radiusControl
+                            border.color: secret.activeFocus ? wifi.theme.accent : wifi.theme.outline
                         }
                     }
                     Action {

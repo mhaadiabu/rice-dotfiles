@@ -8,6 +8,8 @@ import Quickshell.Wayland
 PanelWindow {
     id: dock
 
+    required property RiceTheme theme
+
     required property bool overviewOpen
     required property string labelFont
     property var pinnedApps: []
@@ -181,8 +183,8 @@ PanelWindow {
             y: parent.height - height - dock.bottomGap + pointerArea.bottomInset
             width: appRow.implicitWidth + 12
             height: 48
-            radius: 16
-            color: "#cb181818"
+            radius: dock.theme.radiusCard
+            color: dock.theme.dock
             visible: apps.count > 0
             enabled: dock.shown
 
@@ -226,7 +228,7 @@ PanelWindow {
                             anchors.verticalCenter: parent.verticalCenter
                             width: 1
                             height: 22
-                            color: "#35ffffff"
+                            color: dock.theme.outline
                         }
 
                         Item {
@@ -300,7 +302,7 @@ PanelWindow {
                                 width: tile.active ? 13 : 4
                                 height: 3
                                 radius: 2
-                                color: tile.active ? "#ffffff" : "#aaffffff"
+                                color: tile.active ? dock.theme.ink : dock.theme.muted
                             }
 
                             HoverHandler {
@@ -337,12 +339,12 @@ PanelWindow {
                                 onClicked: dock.pinRequested(tile.key, tile.desktopId, tile.displayName)
                                 background: Rectangle {
                                     radius: width / 2
-                                    color: pin.hovered || pin.visualFocus ? "#525761" : "#303238"
-                                    border.color: "#25ffffff"
+                                    color: pin.hovered || pin.visualFocus ? dock.theme.selected : dock.theme.card
+                                    border.color: dock.theme.line
                                 }
                                 contentItem: Text {
                                     text: tile.pinned ? "−" : "+"
-                                    color: "#f5f5f5"
+                                    color: dock.theme.ink
                                     font.pixelSize: 14
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
@@ -356,8 +358,8 @@ PanelWindow {
                                 anchors.bottomMargin: 9
                                 width: caption.implicitWidth + 14
                                 height: 20
-                                radius: 8
-                                color: "#ed181818"
+                                radius: dock.theme.radiusControl
+                                color: dock.theme.surface
 
                                 Text {
                                     id: caption
@@ -366,7 +368,7 @@ PanelWindow {
                                         : tile.windowCount > 1
                                         ? tile.displayName + " · " + tile.windowCount + " windows"
                                         : tile.displayName
-                                    color: "white"
+                                    color: dock.theme.ink
                                     font.family: dock.labelFont
                                     font.pixelSize: 11
                                 }

@@ -2,17 +2,17 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import Quickshell.Services.UPower
+import Quickshell.Services.Pipewire
 import Quickshell.Networking
 
-// Top bar plus the Wi-Fi and sound popovers.
-// Palette follows T3 Code: neutral near-black, hairline borders, white as the only accent.
+// Top bar, desktop popovers and dock.
 ShellRoot {
 PanelWindow {
     id: root
 
     Component.onCompleted: {
-        statusReader.running = true;
         niriEvents.running = true;
         systemStatsReader.running = true;
     }
@@ -28,7 +28,6 @@ PanelWindow {
 
     // Palette
     readonly property color bg: "transparent"
-    readonly property color panel: "#f9161616"
     readonly property color hover: "#18ffffff"
     readonly property color line: "#262626"
     readonly property color fgStrong: "#f5f5f5"
@@ -45,25 +44,25 @@ PanelWindow {
         battery.state === UPowerDeviceState.Charging || battery.state === UPowerDeviceState.PendingCharge
     )
     readonly property string batteryLevel: batteryPresent ? batteryPercent + "%" : "--"
-    readonly property string batteryIcon: {
-        if (batteryLow)
-            return batteryCharging ? "battery-low-charging-red-symbolic.svg" : "battery-low-red-symbolic.svg";
-        const level = batteryPercent >= 85 ? "full" : batteryPercent >= 55 ? "good" : batteryPercent >= 25 ? "medium" : "low";
-        return "battery-" + level + (batteryCharging ? "-charging-symbolic.svg" : "-symbolic.svg");
-    }
-    readonly property bool wifiOn: Networking.wifiEnabled && Networking.wifiHardwareEnabled
     readonly property WifiDevice wifiDevice: Networking.devices.values.find(device => device.type === DeviceType.Wifi) ?? null
-    readonly property bool wifiConnected: (wifiDevice?.networks.values.some(network => network.connected) ?? false)
-    readonly property bool wifiActive: wifiOn && wifiConnected
-    property string volumeLevel: "--"
-    property bool muted: false
+    readonly property WifiNetwork connectedWifi: wifiDevice?.networks.values.find(network => network.connected) ?? null
+    readonly property PwNodeAudio audio: Pipewire.defaultAudioSink?.audio ?? null
+    property string settingsMenu: ""
+    RiceTheme { id: appearanceTheme }
+    PwObjectTracker { objects: Pipewire.defaultAudioSink ? [Pipewire.defaultAudioSink] : [] }
+
+    function openSettings(menu) {
+        settingsMenu = settingsMenu === menu ? "" : menu;
+    }
+
+    PersistentProperties {
+        id: preferences
+        property bool dnd: false
+    }
     property int workspaceIndex: 0
     property var niriWorkspaces: []
     property var workspaceIndices: []
     property string focusedTitle: "Desktop"
-    property bool wifiMenuOpen: false
-    property bool volumeMenuOpen: false
-    property var audioOutputs: []
     property bool overviewOpen: false
     property int cpuPercent: 0
     property int memPercent: 0
@@ -138,16 +137,12 @@ PanelWindow {
             hoverEnabled: true
             Accessible.name: "Notification Center, " + Qt.formatDateTime(clock.date, "ddd MMM d, HH:mm")
 
-            onClicked: {
-                root.wifiMenuOpen = false;
-                root.volumeMenuOpen = false;
-                notificationCenter.toggle();
-            }
+            onClicked: root.openSettings("notifications")
 
             HoverHandler { cursorShape: Qt.PointingHandCursor }
 
             background: Rectangle {
-                radius: 6
+                radius: appearanceTheme.radiusSmall
                 color: notificationCenter.shown || clockButton.hovered || clockButton.down || clockButton.visualFocus ? root.hover : "transparent"
             }
 
@@ -174,27 +169,19 @@ PanelWindow {
             }
         }
 
-        RiceNotifications {
-            id: notificationCenter
-            bar: root
-            trigger: clockButton
-            today: clock.date
-            panelColor: root.panel
-            face: root.face
-        }
 
         Row {
             anchors.right: parent.right
-            anchors.rightMargin: 8
+            anchors.rightMargin: appearanceTheme.popoverSide
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 2
+            spacing: 0
 
             // Minimal system monitor chip (CPU & RAM)
             Rectangle {
                 id: sysMonitorChip
-                width: sysChipRow.implicitWidth + 18
+                width: sysChipRow.implicitWidth + 10
                 height: 26
-                radius: 6
+                radius: appearanceTheme.radiusSmall
                 color: sysMonitorArea.containsMouse ? root.hover : "transparent"
 
                 Row {
@@ -202,12 +189,10 @@ PanelWindow {
                     anchors.centerIn: parent
                     spacing: 5
 
-                    Image {
-                        source: Quickshell.shellPath("icons/mac-tahoe/activity-monitor-symbolic.svg")
-                        sourceSize.width: 13
-                        sourceSize.height: 13
-                        width: 13
-                        height: 13
+                    RiceBarGlyph {
+                        glyph: "activity"
+                        width: implicitWidth
+                        height: implicitHeight
                         anchors.verticalCenter: parent.verticalCenter
                     }
 
@@ -247,248 +232,123 @@ PanelWindow {
                 }
             }
 
-            Repeater {
-                model: [
-                    {
-                        icon: root.wifiActive ? "network-wireless-on.svg" : "network-wireless-off.svg",
-                        value: "",
-                        dimmed: !root.wifiActive
-                    },
-                    {
-                        icon: root.muted ? "audio-volume-muted-symbolic.svg" : Number(root.volumeLevel.replace("%", "")) < 35 ? "audio-volume-low-symbolic.svg" : "audio-volume-high-symbolic.svg",
-                        value: root.muted ? "Muted" : root.volumeLevel,
-                        dimmed: false
-                    },
-                    {
-                        icon: root.batteryIcon,
-                        value: root.batteryLevel,
-                        dimmed: false
-                    }
-                ]
-                Rectangle {
-                    required property var modelData
-                    required property int index
-                    property bool active: (index === 0 && root.wifiMenuOpen) || (index === 1 && root.volumeMenuOpen)
-                    width: modelData.value.length > 0 ? chip.implicitWidth + 20 : 28
-                    height: 26
-                    radius: 6
-                    color: active || chipArea.containsMouse ? root.hover : "transparent"
-                    Row {
-                        id: chip
-                        anchors.centerIn: parent
-                        spacing: modelData.value.length > 0 ? 6 : 0
-                        Image {
-                            source: Quickshell.shellPath("icons/mac-tahoe/" + modelData.icon)
-                            sourceSize.width: 14
-                            sourceSize.height: 14
-                            width: 14
-                            height: 14
-                            anchors.verticalCenter: parent.verticalCenter
-                            opacity: modelData.dimmed ? 0.45 : 1.0
-                        }
-                        Text {
-                            visible: modelData.value.length > 0
-                            text: modelData.value
-                            anchors.verticalCenter: parent.verticalCenter
-                            color: index === 2 && root.batteryLow ? "#ff6969" : root.fgStrong
-                            font.family: root.face
-                            font.pixelSize: 12
-                        }
-                    }
-                    MouseArea {
-                        id: chipArea
-                        anchors.fill: parent
-                        cursorShape: index < 2 ? Qt.PointingHandCursor : Qt.ArrowCursor
-                        hoverEnabled: true
-                        onClicked: {
-                            if (index === 0) {
-                                root.wifiMenuOpen = !root.wifiMenuOpen;
-                                root.volumeMenuOpen = false;
-                            } else if (index === 1) {
-                                root.volumeMenuOpen = !root.volumeMenuOpen;
-                                root.wifiMenuOpen = false;
-                            }
-                        }
-                    }
-                }
+            RiceStatusButton {
+                visible: controls.recording
+                glyph: "record"
+                ink: "#ff6268"
+                enabled: !stopRecording.running
+                Accessible.name: "Stop screen recording"
+                onClicked: stopRecording.running = true
+            }
+
+            RiceStatusButton {
+                visible: preferences.dnd
+                glyph: "dnd"
+                Accessible.name: "Do Not Disturb is on"
+                onClicked: root.openSettings("controls")
+            }
+
+            RiceStatusButton {
+                glyph: controls.hotspot ? "hotspot" : "wifi"
+                level: root.connectedWifi?.signalStrength ?? 0
+                active: root.settingsMenu === "wifi"
+                Accessible.name: "Wi-Fi networks"
+                onClicked: root.openSettings("wifi")
+            }
+
+            RiceStatusButton {
+                glyph: "sound"
+                level: root.audio?.volume ?? 0
+                muted: !root.audio || root.audio.muted
+                active: root.settingsMenu === "sound"
+                Accessible.name: "Sound"
+                onClicked: root.openSettings("sound")
+            }
+
+            RiceStatusButton {
+                visible: root.batteryPresent
+                glyph: "battery"
+                level: root.batteryPercent / 100
+                charging: root.batteryCharging
+                ink: root.batteryLow ? "#ff6268" : "#f5f7fb"
+                label: root.batteryLevel
+                face: root.face
+                labelColor: root.batteryLow ? "#ff6969" : root.fgStrong
+                clickable: false
+                Accessible.name: "Battery, " + label
+            }
+
+            RiceStatusButton {
+                glyph: "controls"
+                active: root.settingsMenu === "controls"
+                Accessible.name: "Control Center"
+                onClicked: root.openSettings("controls")
             }
         }
 
-        RiceWifi {
-            anchor.window: root
-            anchor.rect.x: root.width - implicitWidth - 12
-            anchor.rect.y: root.height + 4
-            face: root.face
-            panelColor: root.panel
-            visible: root.wifiMenuOpen
-            onVisibleChanged: if (!visible) root.wifiMenuOpen = false
-        }
+    }
 
-        // Sound popover
-        PopupWindow {
-            id: soundPopup
-            anchor.window: root
-            anchor.rect.x: root.width - 264
-            anchor.rect.y: root.height + 4
-            implicitWidth: 252
-            implicitHeight: soundColumn.implicitHeight + 28
-            visible: root.volumeMenuOpen
-            grabFocus: true
-            onVisibleChanged: {
-                if (visible) audioOutputReader.running = true;
-                else root.volumeMenuOpen = false;
-            }
-            color: "transparent"
-            Rectangle {
+    // One layer below the bar keeps its triggers outside the dismissal area.
+    PanelWindow {
+        id: menus
+        screen: root.screen
+        anchors { top: true; right: true; bottom: true; left: true }
+        margins.top: root.height
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.namespace: "rice-bar-menus"
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+        color: "transparent"
+        visible: root.settingsMenu !== ""
+
+        Item {
+            id: menuLayer
+            anchors.fill: parent
+            focus: true
+            Keys.onEscapePressed: root.settingsMenu = ""
+
+            MouseArea {
                 anchors.fill: parent
-                radius: 18
-                color: root.panel
-                transformOrigin: Item.TopRight
+                onClicked: root.settingsMenu = ""
+            }
 
-                opacity: soundPopup.visible ? 1.0 : 0.0
-                scale: soundPopup.visible ? 1.0 : 0.92
-                transform: Translate {
-                    y: soundPopup.visible ? 0 : -8
-                    Behavior on y { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                }
-                Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                Column {
-                    id: soundColumn
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.margins: 14
-                    spacing: 12
-                    Item {
-                        width: parent.width
-                        height: 22
-                        Text {
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "Sound"
-                            color: root.fgStrong
-                            font.family: root.face
-                            font.pixelSize: 14
-                            font.weight: Font.DemiBold
-                        }
-                        Text {
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: root.muted ? "Muted" : root.volumeLevel
-                            color: root.fgMuted
-                            font.family: root.face
-                            font.pixelSize: 12
-                        }
-                    }
-                    Rectangle { width: parent.width; height: 1; color: root.line }
-                    Row {
-                        width: parent.width
-                        spacing: 8
-                        Slider {
-                            id: volumeSlider
-                            width: parent.width - 32
-                            height: 24
-                            from: 0
-                            to: 1
-                            value: Number(root.volumeLevel.replace("%", "")) / 100
-                            background: Rectangle {
-                                x: volumeSlider.leftPadding
-                                y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
-                                width: volumeSlider.availableWidth
-                                height: 14
-                                radius: 7
-                                color: "#454545"
-                                Rectangle {
-                                    width: volumeSlider.visualPosition * parent.width
-                                    height: parent.height
-                                    radius: 7
-                                    color: "#a8a8a8"
-                                }
-                            }
-                            handle: Rectangle {
-                                x: volumeSlider.leftPadding + volumeSlider.visualPosition * (volumeSlider.availableWidth - width)
-                                y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
-                                width: 16
-                                height: 16
-                                radius: 8
-                                color: "white"
-                            }
-                            onMoved: {
-                                root.volumeLevel = Math.round(value * 100) + "%";
-                                volumeControl.exec(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", value.toFixed(2)]);
-                            }
-                        }
-                        Rectangle {
-                            width: 24
-                            height: 24
-                            radius: 6
-                            color: muteArea.containsMouse ? root.hover : "transparent"
-                            Image {
-                                anchors.centerIn: parent
-                                width: 16
-                                height: 16
-                                sourceSize.width: 16
-                                sourceSize.height: 16
-                                source: Quickshell.shellPath("icons/mac-tahoe/" + (root.muted ? "audio-volume-muted-symbolic.svg" : Number(root.volumeLevel.replace("%", "")) < 35 ? "audio-volume-low-symbolic.svg" : "audio-volume-high-symbolic.svg"))
-                            }
-                            MouseArea {
-                                id: muteArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    root.muted = !root.muted;
-                                    volumeControl.exec(["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", root.muted ? "1" : "0"]);
-                                }
-                            }
-                        }
-                    }
-                    Text {
-                        text: "Output"
-                        color: root.fgMuted
-                        font.family: root.face
-                        font.pixelSize: 11
-                    }
-                    Column {
-                        width: parent.width
-                        spacing: 2
-                        Repeater {
-                            model: root.audioOutputs
-                            Rectangle {
-                                required property var modelData
-                                width: parent.width
-                                height: 30
-                                radius: 6
-                                color: outputArea.containsMouse || modelData.active ? root.hover : "transparent"
-                                Text {
-                                    anchors.left: parent.left
-                                    anchors.leftMargin: 9
-                                    anchors.right: parent.right
-                                    anchors.rightMargin: 9
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: modelData.name
-                                    elide: Text.ElideRight
-                                    color: root.fgStrong
-                                    font.family: root.face
-                                    font.pixelSize: 12
-                                }
-                                MouseArea {
-                                    id: outputArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        audioOutputControl.command = ["wpctl", "set-default", String(modelData.id)];
-                                        audioOutputControl.running = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+            RiceWifi {
+                x: parent.width - width - appearanceTheme.popoverSide
+                y: appearanceTheme.popoverTop
+                face: root.face
+                theme: appearanceTheme
+                motionEnabled: controls.motionEnabled
+                visible: root.settingsMenu === "wifi"
+            }
+
+            RiceControlCenter {
+                id: controls
+                theme: appearanceTheme
+                x: parent.width - width - appearanceTheme.popoverSide
+                y: appearanceTheme.popoverTop
+                face: root.face
+                audio: root.audio
+                wifiDevice: root.wifiDevice
+                dnd: preferences.dnd
+                onToggleDnd: preferences.dnd = !preferences.dnd
+                onOpenWifi: root.settingsMenu = "wifi"
+                soundOnly: root.settingsMenu === "sound"
+                visible: root.settingsMenu === "controls" || root.settingsMenu === "sound"
             }
         }
+    }
+
+    RiceNotifications {
+        id: notificationCenter
+        bar: root
+        host: menuLayer
+        trigger: clockButton
+        today: clock.date
+        theme: appearanceTheme
+        face: root.face
+        motionEnabled: controls.motionEnabled
+        shown: root.settingsMenu === "notifications"
+        dnd: preferences.dnd
     }
 
     Timer {
@@ -500,43 +360,9 @@ PanelWindow {
         onTriggered: date = new Date()
     }
 
-    // Reads volume and mute state as "volume|muted".
     Process {
-        id: statusReader
-        command: ["sh", "-c", "vol=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null); volume=$(printf '%s' \"$vol\" | awk '{printf \"%d%%\", $2 * 100}'); muted=0; case \"$vol\" in *MUTED*) muted=1;; esac; printf '%s|%s' \"${volume:---}\" \"$muted\""]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const values = text.trim().split("|");
-                if (values.length === 2) {
-                    root.volumeLevel = values[0];
-                    root.muted = values[1] === "1";
-                }
-            }
-        }
-        onExited: refreshTimer.restart()
-    }
-
-    Process { id: volumeControl }
-    Process {
-        id: audioOutputControl
-        onExited: audioOutputReader.running = true
-    }
-    Process {
-        id: audioOutputReader
-        command: ["python3", Quickshell.shellPath("audio-outputs.py")]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try { root.audioOutputs = JSON.parse(text); }
-                catch (error) { console.warn("Could not read audio outputs:", error); }
-            }
-        }
-    }
-    Timer {
-        id: refreshTimer
-        interval: 10000
-        running: true
-        repeat: true
-        onTriggered: if (!statusReader.running) statusReader.running = true
+        id: stopRecording
+        command: ["sh", Quickshell.env("HOME") + "/.config/niri/screencast.sh", "--stop-only"]
     }
 
     Process {
@@ -571,6 +397,9 @@ PanelWindow {
                     } else if (event.WorkspaceActivated?.focused) {
                         root.focusWorkspace(event.WorkspaceActivated.id);
                     }
+                    // Let Flameshot capture the popover, then release the live overlay.
+                    if (root.settingsMenu && event.WindowOpenedOrChanged?.window.app_id === "flameshot")
+                        root.settingsMenu = "";
                     dock.applyWindowEvent(event);
                     if (event.OverviewOpenedOrClosed) {
                         root.overviewOpen = event.OverviewOpenedOrClosed.is_open;
@@ -584,18 +413,21 @@ PanelWindow {
     }
 
     IpcHandler {
+        target: "controlCenter"
+        function toggle(): void { root.openSettings("controls"); }
+        function toggleSound(): void { root.openSettings("sound"); }
+    }
+
+    IpcHandler {
         target: "notifications"
-        function toggle(): void {
-            root.wifiMenuOpen = false;
-            root.volumeMenuOpen = false;
-            notificationCenter.toggle();
-        }
+        function toggle(): void { root.openSettings("notifications"); }
     }
 
 }
 
 RiceDock {
     id: dock
+    theme: appearanceTheme
     overviewOpen: root.overviewOpen
     labelFont: root.face
     pinnedApps: dockPins.items
@@ -633,10 +465,12 @@ FileView {
 RiceUtilities {
     id: utilities
     face: root.face
-    panelColor: root.panel
+    theme: appearanceTheme
+    motionEnabled: controls.motionEnabled
 }
 
 RiceSpotlight {
+    theme: appearanceTheme
     utilities: utilities
     windows: dock.windows
     face: root.face

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -8,7 +9,8 @@ import Quickshell.Wayland
 PanelWindow {
     id: panel
     required property string face
-    required property color panelColor
+    required property RiceTheme theme
+    required property bool motionEnabled
     property string mode: ""
     property var items: []
     property bool confirmPower: false
@@ -92,7 +94,7 @@ PanelWindow {
 
     Rectangle {
         anchors.fill: parent
-        color: "#60000000"
+        color: panel.theme.scrim
     }
 
     TapHandler {
@@ -106,21 +108,18 @@ PanelWindow {
         }
     }
 
-    Rectangle {
+    RiceMenuSurface {
         id: card
+        motionEnabled: panel.motionEnabled
+        revealOrigin: Item.Center
         anchors.centerIn: parent
         width: Math.min(parent.width - 40, panel.mode === "power" ? 330 : 550)
         height: Math.min(parent.height - 52, body.implicitHeight + 28)
-        color: "#18181a"
-        radius: 20
+        color: panel.theme.surface
+        radius: panel.theme.radiusPanel
         border.width: 1
-        border.color: "#33ffffff"
+        border.color: panel.theme.line
         clip: true
-
-        scale: panel.visible ? 1.0 : 0.94
-        opacity: panel.visible ? 1.0 : 0.0
-        Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-        Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
 
         Keys.onEscapePressed: {
             if (panel.confirmPower) {
@@ -182,7 +181,7 @@ PanelWindow {
                 Text {
                     text: panel.mode === "power" ? (panel.confirmPower ? "Confirm " + panel.pendingPower : "Power")
                         : panel.mode === "wallpaper" ? "Wallpapers" : "Clipboard"
-                    color: "#f5f5f5"
+                    color: panel.theme.ink
                     font.family: panel.face
                     font.pixelSize: 18
                     font.weight: Font.DemiBold
@@ -193,14 +192,14 @@ PanelWindow {
                     visible: panel.mode === "power" && !panel.confirmPower
                     width: 36
                     height: 20
-                    radius: 5
-                    color: "#0fffffff"
+                    radius: panel.theme.radiusSmall
+                    color: panel.theme.tile
                     border.width: 1
-                    border.color: "#18ffffff"
+                    border.color: panel.theme.selected
                     Text {
                         anchors.centerIn: parent
                         text: "ESC"
-                        color: "#8a8a8e"
+                        color: panel.theme.muted
                         font.family: panel.face
                         font.pixelSize: 10
                         font.weight: Font.DemiBold
@@ -213,12 +212,14 @@ PanelWindow {
                 Layout.fillWidth: true
                 visible: panel.mode !== "power"
                 placeholderText: panel.mode === "wallpaper" ? "Find a wallpaper" : "Find in clipboard"
-                color: "#f5f5f5"
-                placeholderTextColor: "#9c9c9c"
+                color: panel.theme.ink
+                placeholderTextColor: panel.theme.muted
+                selectionColor: panel.theme.accent
+                selectedTextColor: "#ffffff"
                 font.family: panel.face
                 font.pixelSize: 15
                 padding: 9
-                background: Rectangle { radius: 7; color: "#25ffffff" }
+                background: Rectangle { radius: panel.theme.radiusControl; color: panel.theme.hover }
                 onTextChanged: list.currentIndex = 0
                 Keys.onDownPressed: list.incrementCurrentIndex()
                 Keys.onUpPressed: list.decrementCurrentIndex()
@@ -236,7 +237,7 @@ PanelWindow {
                 Text {
                     Layout.fillWidth: true
                     text: panel.pendingPower + " the computer now? Unsaved work may be lost."
-                    color: "#a1a1aa"
+                    color: panel.theme.muted
                     font.family: panel.face
                     font.pixelSize: 13
                     wrapMode: Text.WordWrap
@@ -254,15 +255,15 @@ PanelWindow {
                         font.pixelSize: 13
                         font.weight: Font.Medium
                         background: Rectangle {
-                            radius: card.radius - 12
-                            color: parent.hovered ? "#1fffffff" : "#10ffffff"
+                            radius: panel.theme.radiusControl
+                            color: parent.hovered ? panel.theme.hover : panel.theme.tile
                             border.width: 1
-                            border.color: "#1affffff"
+                            border.color: panel.theme.line
                         }
                         contentItem: Text {
                             text: parent.text
                             font: parent.font
-                            color: "#e4e4e7"
+                            color: panel.theme.ink
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                         }
@@ -280,7 +281,7 @@ PanelWindow {
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                         background: Rectangle {
-                            radius: card.radius - 12
+                            radius: panel.theme.radiusControl
                             color: parent.hovered ? "#e53935" : "#c62828"
                         }
                         contentItem: Text {
@@ -304,7 +305,7 @@ PanelWindow {
             }
 
             // Normal Options List
-            ListView {
+            RiceListView {
                 id: list
                 visible: !panel.confirmPower
                 Layout.fillWidth: true
@@ -312,11 +313,13 @@ PanelWindow {
                 readonly property int rowHeight: panel.mode === "wallpaper" ? 70 : (panel.mode === "power" ? 44 : 38)
                 implicitHeight: Math.min(350, Math.max(count, 1) * rowHeight)
                 clip: true
-                boundsBehavior: Flickable.StopAtBounds
                 model: panel.mode === "power"
                     ? panel.powerActions
                     : panel.items.filter(item => item.name.toLowerCase().includes(search.text.trim().toLowerCase()))
-                ScrollBar.vertical: ScrollBar {}
+                ScrollBar.vertical: ScrollBar {
+                    palette.mid: panel.theme.outline
+                    palette.dark: panel.theme.ink
+                }
                 delegate: ItemDelegate {
                     required property var modelData
                     required property int index
@@ -329,11 +332,11 @@ PanelWindow {
                     Accessible.name: modelData.name
 
                     background: Rectangle {
-                        radius: card.radius - 12
+                        radius: panel.theme.radiusControl
                         color: parent.hovered || parent.visualFocus || ((search.activeFocus || card.activeFocus) && index === list.currentIndex)
-                            ? "#18ffffff" : "transparent"
+                            ? panel.theme.selected : "transparent"
                         border.width: 1
-                        border.color: parent.hovered ? "#12ffffff" : "transparent"
+                        border.color: parent.hovered ? panel.theme.line : "transparent"
                     }
 
                     contentItem: RowLayout {
@@ -344,11 +347,17 @@ PanelWindow {
                             visible: panel.mode === "power" && Boolean(modelData.icon)
                             Layout.preferredWidth: 28
                             Layout.preferredHeight: 28
-                            radius: 7
-                            color: "#0dffffff"
+                            radius: panel.theme.radiusControl
+                            color: panel.theme.tile
                             Image {
                                 anchors.centerIn: parent
-                                source: Quickshell.shellPath("icons/mac-tahoe/" + (modelData.icon || ""))
+                                source: modelData.icon ? Quickshell.shellPath("icons/mac-tahoe/" + modelData.icon) : ""
+                                layer.enabled: !panel.theme.dark
+                                layer.effect: MultiEffect {
+                                    colorization: 1
+                                    colorizationColor: panel.theme.ink
+                                    brightness: 1
+                                }
                                 sourceSize.width: 16
                                 sourceSize.height: 16
                                 width: 16
@@ -361,8 +370,8 @@ PanelWindow {
                             visible: Boolean(modelData.url)
                             Layout.preferredWidth: 82
                             Layout.preferredHeight: 52
-                            radius: 5
-                            color: "#242427"
+                            radius: panel.theme.radiusSmall
+                            color: panel.theme.card
                             clip: true
                             Image {
                                 anchors.fill: parent
@@ -378,7 +387,7 @@ PanelWindow {
                             Layout.fillWidth: true
                             text: modelData.name
                             elide: Text.ElideRight
-                            color: "#f5f5f5"
+                            color: panel.theme.ink
                             font.family: panel.face
                             font.pixelSize: 14
                             font.weight: Font.Medium
@@ -393,14 +402,14 @@ PanelWindow {
                             Rectangle {
                                 width: 22
                                 height: 22
-                                radius: 5
-                                color: "#0fffffff"
+                                radius: panel.theme.radiusSmall
+                                color: panel.theme.tile
                                 border.width: 1
-                                border.color: "#1affffff"
+                                border.color: panel.theme.line
                                 Text {
                                     anchors.centerIn: parent
                                     text: modelData.key || ""
-                                    color: "#a1a1aa"
+                                    color: panel.theme.muted
                                     font.family: panel.face
                                     font.pixelSize: 11
                                     font.weight: Font.DemiBold
@@ -415,7 +424,7 @@ PanelWindow {
                 Text {
                     visible: list.count === 0 && panel.mode !== "power"
                     text: search.text ? "No matches" : panel.mode === "wallpaper" ? "No wallpapers found" : "Clipboard history is empty"
-                    color: "#bababf"
+                    color: panel.theme.muted
                     anchors.centerIn: parent
                     font.family: panel.face
                     font.pixelSize: 14
