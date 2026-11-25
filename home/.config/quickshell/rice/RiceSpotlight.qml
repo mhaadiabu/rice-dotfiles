@@ -629,8 +629,8 @@ PanelWindow {
                     anchors.centerIn: parent
                     text: cell.modelData.emoji ?? ""
                     textFormat: Text.PlainText
-                    font.family: "Noto Color Emoji"
-                    font.pixelSize: 26
+                    font.family: "emoji"
+                    font.pixelSize: 30
                 }
 
                 MouseArea {

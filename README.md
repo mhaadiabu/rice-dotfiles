@@ -35,7 +35,7 @@ Set Dolphin as the file manager with
 
 `Mod+.` opens it, and so does the Emoji command in Spotlight. It stays open
 while you pick. It needs `wtype`, wl-clipboard, and an emoji font such as
-`noto-fonts-emoji`.
+`noto-fonts-emoji`. It draws whichever font fontconfig picks for `emoji`.
 
 Foot, Kitty, and Ghostty get the emoji typed directly. Other apps get a paste,
 because Chromium drops most typed emoji. The paste borrows the clipboard, then
