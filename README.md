@@ -31,6 +31,21 @@ For Dolphin, set the qt6ct palette path to
 Set Dolphin as the file manager with
 `xdg-mime default org.kde.dolphin.desktop inode/directory`.
 
+## Emoji picker
+
+`Mod+.` opens it, and so does the Emoji command in Spotlight. It stays open
+while you pick. It needs `wtype`, wl-clipboard, and an emoji font such as
+`noto-fonts-emoji`.
+
+Foot, Kitty, and Ghostty get the emoji typed directly. Other apps get a paste,
+because Chromium drops most typed emoji. The paste borrows the clipboard, then
+restores one format of what was there. To add another terminal, put its app ID
+in `insert-emoji.sh`.
+
+The emoji list in `emojis.json` comes from
+[emojibase-data](https://github.com/milesj/emojibase) 17.0.0, under the license
+in `emojis.LICENSE`.
+
 ## Machine-specific configuration
 
 - Dock pins ship with one starter entry. Hover an app tile and left-click its

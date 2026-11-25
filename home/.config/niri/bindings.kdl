@@ -86,7 +86,7 @@ binds {
     Mod+L { focus-column-right; }
     Mod+Left { focus-column-left; }
     Mod+Minus { set-column-width "-10%"; }
-    Mod+Period { expel-window-from-column; }
+    Mod+Period repeat=false hotkey-overlay-title="Emoji Picker" { spawn "qs" "ipc" "-c" "rice" "call" "spotlight" "emoji"; }
     Mod+Q repeat=false { close-window; }
     Mod+R { switch-preset-column-width; }
     Mod+Right { focus-column-right; }

@@ -16,12 +16,19 @@ PanelWindow {
     property string mode: ""
     property var actionTarget: null
     property var favorites: []
+    property var recentEmoji: []
+    // Recents as they were when the picker opened, so picking doesn't reshuffle the grid.
+    property var shownRecentEmoji: []
+    property var emojiQueue: []
+    property bool lendingKeyboard: false
+    property var emojis: []
     property bool stateReady: false
     property int selectedIndex: 0
     readonly property string query: search.text.trim()
     readonly property var results: {
         if (mode === "windows") return windowResults(query);
         if (mode === "files") return fileResults;
+        if (mode === "emoji") return emojiResults(query);
         if (!query) return homeResults();
         return applicationResults(query).concat(fileResults);
     }
@@ -30,18 +37,23 @@ PanelWindow {
     readonly property var visibleActions: actions.filter(action => action.name.toLowerCase().includes(actionSearch.text.trim().toLowerCase()))
     readonly property var rows: actionTarget ? visibleActions : results
     readonly property int rowHeight: 44
+    readonly property bool emojiMode: mode === "emoji"
+    readonly property bool searchesFiles: mode === "" || mode === "files"
+    readonly property int emojiColumns: 10
+    readonly property int emojiCellHeight: 48
 
     anchors { top: true; bottom: true; left: true; right: true }
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.namespace: "rice-spotlight"
     WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+    WlrLayershell.keyboardFocus: lendingKeyboard ? WlrKeyboardFocus.None : WlrKeyboardFocus.Exclusive
     color: "transparent"
     visible: false
 
     readonly property var commands: [
         { name: "Search Files", location: "Command", command: "files", icon: "system-search" },
         { name: "Switch Windows", location: "Command", command: "windows", icon: "preferences-system-windows" },
+        { name: "Emoji", location: "Command", command: "emoji", icon: "face-smile" },
         { name: "Clipboard History", location: "Command", utility: "clipboard", icon: "edit-paste" },
         { name: "Wallpapers", location: "Command", utility: "wallpaper", icon: "preferences-desktop-wallpaper" },
         { name: "Power", location: "Command", utility: "power", icon: "system-shutdown" }
@@ -59,6 +71,7 @@ PanelWindow {
             try {
                 const data = JSON.parse(text());
                 spotlight.favorites = Array.isArray(data.favorites) ? data.favorites.filter(id => typeof id === "string") : [];
+                spotlight.recentEmoji = Array.isArray(data.recentEmoji) ? data.recentEmoji.filter(char => typeof char === "string") : [];
             } catch (error) {
                 console.warn("Could not read Spotlight preferences:", error);
             }
@@ -68,7 +81,86 @@ PanelWindow {
     }
 
     function saveState() {
-        savedState.setText(JSON.stringify({ favorites }));
+        savedState.setText(JSON.stringify({ favorites, recentEmoji }));
+    }
+
+    // Rows are [emoji, name, space-separated keywords], in Unicode's picker order.
+    FileView {
+        path: Quickshell.shellPath("emojis.json")
+        preload: true
+        onLoaded: {
+            try {
+                spotlight.emojis = JSON.parse(text()).map(([emoji, name, keywords]) => ({ emoji, name, keywords }));
+            } catch (error) {
+                console.warn("Could not read emoji list:", error);
+            }
+        }
+    }
+
+    // Lower ranks sort first: whole words, then word prefixes, then loose text matches.
+    function emojiRank(entry, term, words) {
+        if (entry.name === term) return 0;
+        const name = " " + entry.name + " ";
+        const keywords = " " + entry.keywords + " ";
+        if (name.includes(" " + term + " ") || keywords.includes(" " + term + " ")) return 1;
+        if (name.includes(" " + term)) return 2;
+        if (keywords.includes(" " + term)) return 3;
+        const details = name + keywords;
+        return words.every(word => details.includes(word)) ? 4 : Infinity;
+    }
+
+    // With no query, recently used emoji lead the grid.
+    function emojiResults(query) {
+        const term = query.toLowerCase();
+        if (!term) {
+            const recent = shownRecentEmoji.map(char => emojis.find(entry => entry.emoji === char)).filter(Boolean);
+            return recent.concat(emojis.filter(entry => !shownRecentEmoji.includes(entry.emoji)));
+        }
+        const words = term.split(/\s+/);
+        return emojis.map(entry => ({ entry, rank: emojiRank(entry, term, words) }))
+            .filter(item => Number.isFinite(item.rank))
+            .sort((a, b) => a.rank - b.rank)
+            .map(item => item.entry);
+    }
+
+    // Inserts into the app behind the picker, which stays open for more picks.
+    function insertEmoji(char) {
+        emojiQueue = emojiQueue.concat(char);
+        insertNext();
+        recentEmoji = [char].concat(recentEmoji.filter(entry => entry !== char)).slice(0, emojiColumns * 2);
+        saveState();
+    }
+
+    // One insert at a time, because each one borrows the keyboard and the clipboard.
+    function insertNext() {
+        if (inserter.running || !emojiQueue.length) return;
+        const [char, ...rest] = emojiQueue;
+        emojiQueue = rest;
+        lendingKeyboard = true;
+        inserter.command = ["sh", Quickshell.shellPath("insert-emoji.sh"), char];
+        inserter.running = true;
+    }
+
+    // The script prints a line once its paste is sent, so the keyboard can come back
+    // before it finishes restoring the clipboard. Typed inserts just exit.
+    Process {
+        id: inserter
+        stdout: SplitParser {
+            onRead: spotlight.lendingKeyboard = false
+        }
+        onExited: {
+            spotlight.lendingKeyboard = false;
+            Qt.callLater(spotlight.insertNext);
+        }
+    }
+
+    function openMode(name) {
+        if (name === "emoji") shownRecentEmoji = recentEmoji;
+        closeActions();
+        mode = name;
+        search.clear();
+        resetSearch();
+        search.forceActiveFocus();
     }
 
     function appResult(app, location) {
@@ -146,11 +238,11 @@ PanelWindow {
             return;
         }
         if (result.command) {
-            closeActions();
-            mode = result.command;
-            search.clear();
-            resetSearch();
-            search.forceActiveFocus();
+            openMode(result.command);
+            return;
+        }
+        if (result.emoji) {
+            insertEmoji(result.emoji);
             return;
         }
         visible = false;
@@ -200,7 +292,7 @@ PanelWindow {
     function toggleActions() {
         if (actionTarget) {
             closeActions();
-        } else if (selectedResult) {
+        } else if (selectedResult && !emojiMode) {
             actionTarget = selectedResult;
             actionSearch.clear();
             actionList.currentIndex = 0;
@@ -221,8 +313,18 @@ PanelWindow {
             actionList.positionViewAtIndex(actionList.currentIndex, ListView.Contain);
         } else {
             selectedIndex = (selectedIndex + delta + rows.length) % rows.length;
-            resultList.positionViewAtIndex(selectedIndex, ListView.Contain);
+            if (emojiMode) emojiGrid.positionViewAtIndex(selectedIndex, GridView.Contain);
+            else resultList.positionViewAtIndex(selectedIndex, ListView.Contain);
         }
+    }
+
+    // Vertical movement stops at the grid's edges. A short last row selects its last emoji.
+    function moveEmojiRow(delta) {
+        const next = selectedIndex + delta * emojiColumns;
+        const lastRow = Math.floor((rows.length - 1) / emojiColumns);
+        if (next < 0 || Math.floor(next / emojiColumns) > lastRow) return;
+        selectedIndex = Math.min(next, rows.length - 1);
+        emojiGrid.positionViewAtIndex(selectedIndex, GridView.Contain);
     }
 
     function handleKey(event) {
@@ -237,10 +339,14 @@ PanelWindow {
                 resetSearch();
             } else visible = false;
         } else if (event.key === Qt.Key_Up || event.key === Qt.Key_Down) {
-            moveSelection(event.key === Qt.Key_Up ? -1 : 1);
+            const step = event.key === Qt.Key_Up ? -1 : 1;
+            if (emojiMode) moveEmojiRow(step);
+            else moveSelection(step);
+        } else if (emojiMode && (event.key === Qt.Key_Left || event.key === Qt.Key_Right)) {
+            moveSelection(event.key === Qt.Key_Left ? -1 : 1);
         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
             if (actionTarget) visibleActions[actionList.currentIndex]?.run();
-            else if (control && selectedResult) actionsFor(selectedResult)[1]?.run();
+            else if (control && selectedResult && !emojiMode) actionsFor(selectedResult)[1]?.run();
             else runResult(selectedResult);
         } else {
             return;
@@ -252,7 +358,8 @@ PanelWindow {
         selectedIndex = 0;
         fileResults = [];
         resultList.positionViewAtBeginning();
-        if (visible && mode !== "windows" && query.length >= 3) fileDelay.restart();
+        emojiGrid.positionViewAtBeginning();
+        if (visible && searchesFiles && query.length >= 3) fileDelay.restart();
         else fileDelay.stop();
     }
 
@@ -272,6 +379,16 @@ PanelWindow {
     IpcHandler {
         target: "spotlight"
         function toggle(): void { spotlight.visible = !spotlight.visible; }
+
+        // Closes the picker if it's already open, otherwise opens or switches to it.
+        function emoji(): void {
+            if (spotlight.visible && spotlight.emojiMode) {
+                spotlight.visible = false;
+                return;
+            }
+            spotlight.visible = true;
+            spotlight.openMode("emoji");
+        }
     }
 
     Timer {
@@ -294,7 +411,7 @@ PanelWindow {
                 if (!text.trim()) return;
                 try {
                     const result = JSON.parse(text);
-                    if (spotlight.visible && spotlight.mode !== "windows" && result.query === spotlight.query)
+                    if (spotlight.visible && spotlight.searchesFiles && result.query === spotlight.query)
                         spotlight.fileResults = result.matches;
                 } catch (error) {
                     console.warn("Could not read Spotlight file results:", error);
@@ -313,7 +430,10 @@ PanelWindow {
     Rectangle {
         id: surface
         width: Math.min(540, parent.width - 32)
-        height: search.height + Math.max(44, Math.min(spotlight.rows.length, 7) * spotlight.rowHeight) + footer.height + 10
+        // The picker keeps a fixed height so it doesn't jump while filtering.
+        readonly property int bodyHeight: spotlight.emojiMode ? spotlight.emojiCellHeight * 6
+            : Math.max(44, Math.min(spotlight.rows.length, 7) * spotlight.rowHeight)
+        height: search.height + bodyHeight + footer.height + 10
         anchors.horizontalCenter: parent.horizontalCenter
         y: Math.round(parent.height * 0.22)
         radius: spotlight.theme.radiusPanel
@@ -358,7 +478,8 @@ PanelWindow {
             anchors.rightMargin: 12
             height: 52
             visible: spotlight.actionTarget === null
-            placeholderText: spotlight.mode === "windows" ? "Search open windows"
+            placeholderText: spotlight.emojiMode ? "Search emoji"
+                : spotlight.mode === "windows" ? "Search open windows"
                 : spotlight.mode === "files" ? "Search files" : "Search apps, files, and commands"
             Accessible.name: placeholderText
             font.family: spotlight.face
@@ -410,12 +531,12 @@ PanelWindow {
             anchors.right: parent.right
             anchors.leftMargin: 6
             anchors.rightMargin: 6
-            visible: !spotlight.actionTarget && count > 0
+            visible: !spotlight.emojiMode && !spotlight.actionTarget && count > 0
             clip: true
             focus: false
             keyNavigationEnabled: false
             currentIndex: spotlight.selectedIndex
-            model: spotlight.results
+            model: spotlight.emojiMode ? [] : spotlight.results
 
             delegate: Rectangle {
                 id: row
@@ -457,7 +578,7 @@ PanelWindow {
                     }
                     Text {
                         width: parent.width
-                        text: row.modelData.location
+                        text: row.modelData.location ?? ""
                         textFormat: Text.PlainText
                         elide: Text.ElideMiddle
                         color: spotlight.theme.muted
@@ -472,6 +593,52 @@ PanelWindow {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: spotlight.runResult(row.modelData)
+                }
+            }
+        }
+
+        GridView {
+            id: emojiGrid
+            anchors.fill: resultList
+            visible: spotlight.emojiMode && count > 0
+            clip: true
+            focus: false
+            keyNavigationEnabled: false
+            boundsBehavior: Flickable.StopAtBounds
+            acceptedButtons: Qt.NoButton
+            flickableDirection: Flickable.VerticalFlick
+            cellWidth: width / spotlight.emojiColumns
+            cellHeight: spotlight.emojiCellHeight
+            currentIndex: spotlight.selectedIndex
+            model: spotlight.emojiMode ? spotlight.results : []
+
+            RiceTrackpadScroll { viewport: emojiGrid }
+
+            delegate: Rectangle {
+                id: cell
+                required property int index
+                required property var modelData
+                width: GridView.view.cellWidth
+                height: GridView.view.cellHeight
+                radius: spotlight.theme.radiusControl
+                color: index === spotlight.selectedIndex ? spotlight.theme.selected : cellHit.containsMouse ? spotlight.theme.tile : "transparent"
+                Accessible.role: Accessible.Button
+                Accessible.name: modelData.name
+
+                Text {
+                    anchors.centerIn: parent
+                    text: cell.modelData.emoji ?? ""
+                    textFormat: Text.PlainText
+                    font.family: "Noto Color Emoji"
+                    font.pixelSize: 26
+                }
+
+                MouseArea {
+                    id: cellHit
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: spotlight.runResult(cell.modelData)
                 }
             }
         }
@@ -534,7 +701,7 @@ PanelWindow {
             text: {
                 if (spotlight.actionTarget) return "No matching actions";
                 if (spotlight.mode === "files" && spotlight.query.length < 3) return "Enter at least three characters";
-                if (spotlight.mode !== "windows" && (fileDelay.running || fileReader.running)) return "Searching files…";
+                if (spotlight.searchesFiles && (fileDelay.running || fileReader.running)) return "Searching files…";
                 return "No results";
             }
             color: spotlight.theme.muted
@@ -563,8 +730,13 @@ PanelWindow {
             Text {
                 anchors.left: parent.left
                 anchors.leftMargin: 14
+                anchors.right: parent.right
+                anchors.rightMargin: 14
                 anchors.verticalCenter: parent.verticalCenter
-                text: spotlight.actionTarget ? "Esc  Back" : "↑ ↓  Select     ↵  Open"
+                elide: Text.ElideRight
+                textFormat: Text.PlainText
+                text: spotlight.emojiMode ? "↵  Insert     " + (spotlight.selectedResult?.name ?? "")
+                    : spotlight.actionTarget ? "Esc  Back" : "↑ ↓  Select     ↵  Open"
                 color: spotlight.theme.muted
                 font.family: spotlight.face
                 font.pixelSize: 12
@@ -576,7 +748,7 @@ PanelWindow {
                 anchors.rightMargin: 7
                 anchors.verticalCenter: parent.verticalCenter
                 height: 25
-                visible: spotlight.actionTarget !== null || spotlight.selectedResult !== null
+                visible: !spotlight.emojiMode && (spotlight.actionTarget !== null || spotlight.selectedResult !== null)
                 text: spotlight.actionTarget ? "Ctrl+K  Close actions" : "Ctrl+K  Actions"
                 focusPolicy: Qt.NoFocus
                 onClicked: spotlight.toggleActions()
