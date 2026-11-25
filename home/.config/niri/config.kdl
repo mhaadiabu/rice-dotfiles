@@ -29,7 +29,8 @@ spawn-at-startup "rice-desktop" "start-wallpaper"
 spawn-at-startup "rice-desktop" "start-clipboard"
 spawn-at-startup "kanshi"
 spawn-at-startup "lxqt-policykit-agent"
-spawn-at-startup "swayidle" "-w" "before-sleep" "hyprlock"
+// Keep the sleep inhibitor until Swaylock has secured the session.
+spawn-at-startup "swayidle" "-w" "before-sleep" "swaylock -fF"
 spawn-at-startup "xwayland-satellite"
 
 environment {

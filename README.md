@@ -17,8 +17,9 @@ The core setup uses Niri, Quickshell, Python 3, PipeWire/WirePlumber,
 NetworkManager, and wl-clipboard. Control Center uses brightnessctl for the
 backlight, BlueZ for Bluetooth, and GSettings with the GNOME desktop schemas
 for appearance. Optional features use cliphist, swaybg,
-hyprlock, swayidle, Dolphin, qt6ct, Kitty, btop, FeatherPad, and khal. Check
-the Niri bindings before using them. Terminal, screenshot, and recording
+hyprlock, swayidle, swaylock, Dolphin, qt6ct, Kitty, btop, FeatherPad, and
+khal. Swaylock locks the screen before sleep. Check the Niri bindings before
+using them. Terminal, screenshot, and recording
 shortcuts point to specific apps that you can swap for your own.
 
 Install the [MacTahoe icon theme](https://github.com/vinceliuice/MacTahoe-icon-theme)
